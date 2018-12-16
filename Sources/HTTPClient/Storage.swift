@@ -6,55 +6,42 @@
 //
 
 import Foundation
+#if !USE_EMBEDDED_MODULES
 import Globals
+#endif
 
-public class Storage: Codable{
+
+enum KeychainError: Error {
+    case noPassword
+    case unexpectedPasswordData
+    case unhandledError(status: OSStatus)
+}
+
+open class Storage{
 
     var credentials:Credentials?
 
     static let shared: Storage = Storage()
 
-    init() {
-        self.credentials = Credentials(email:ServicesContext.defaults.email, password:ServicesContext.defaults.password)
-    }
+    init() {}
 
 
     public func save() throws {
-        let jsonData:Data = try JSONEncoder().encode(self)
-        UserDefaults.standard.setValue(jsonData, forKey: "storage")
+        #if !os(Linux)
+        guard let credentials: Credentials = self.credentials else{
+            return
+        }
+        let query: [String: Any] = [ kSecClass as String: kSecClassInternetPassword,
+                                     kSecAttrAccount as String: credentials.account,
+                                     kSecAttrServer as String: ServicesContext.shared.identityServerBaseURL.absoluteString,
+                                     kSecValueData as String:  credentials.password.data(using: String.Encoding.utf8)!]
+        let status = SecItemAdd(query as CFDictionary, nil)
+        guard status == errSecSuccess else { throw KeychainError.unhandledError(status: status) }
+        #endif
     }
 
     public func load() throws{
-        if let jsonData:Data = UserDefaults.standard.data(forKey: "storage"){
-            let storage: Storage = try JSONDecoder().decode(Storage.self, from: jsonData)
-            if ServicesContext.REDUCED_SECURITY_MODE{
-                self.credentials = storage.credentials
-            }
-        }
+        #if !os(Linux)
+        #endif
     }
-
-    // MARK: - Codable
-
-    enum CodingKeys: String, CodingKey{
-        case credentials = "credentials"
-    }
-
-    required public init(from decoder: Decoder) throws {
-        let values = try decoder.container(keyedBy: CodingKeys.self)
-        if ServicesContext.REDUCED_SECURITY_MODE{
-            self.credentials = try values.decodeIfPresent(Credentials.self, forKey: .credentials)
-        }else{
-            self.credentials = nil
-        }
-    }
-
-    public func encode(to encoder: Encoder) throws{
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        if ServicesContext.REDUCED_SECURITY_MODE{
-            try container.encode(self.credentials, forKey: .credentials)
-        }else{
-            try container.encode(Credentials(email:"",password:""), forKey: .credentials)
-        }
-    }
-
 }
