@@ -1,2 +1,3 @@
-# HTTPEngine
-A simple HTTPEngine built on the top of Apple's Foundation
+# HTTPClient
+
+A minimal HTTPClient built on the top of Apple's Shoulders.
