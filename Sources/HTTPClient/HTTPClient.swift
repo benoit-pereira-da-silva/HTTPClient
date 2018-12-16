@@ -1,6 +1,6 @@
 //
-//  MPConnect.swift
-//  mp
+//  HTTPClient.swift
+//  HTTPClient
 //
 //  Created by Benoit Pereira da silva on 16/12/2018.
 //
@@ -56,8 +56,8 @@ public protocol StringRecipient{
 
 public extension Notification {
 
-    public struct MPConnect {
-        static let authenticationIsRequired:Notification.Name = Notification.Name(rawValue: "tv.MP.authenticationIsRequired")
+    public struct Auth {
+        static let authenticationIsRequired:Notification.Name = Notification.Name(rawValue: "com.pereira-da-silva.authenticationIsRequired")
     }
 }
 
@@ -255,12 +255,12 @@ public class HTTPClient{
                                 }else{
                                     didFail(MPConnectError.authenticationDidFail, NSLocalizedString("Credentials are not available", comment: "Credentials are not available"))
                                     // You can observe this notification and prompt to auth
-                                    NotificationCenter.default.post(name: Notification.MPConnect.authenticationIsRequired, object: nil)
+                                    NotificationCenter.default.post(name: Notification.Auth.authenticationIsRequired, object: nil)
                                 }
                             }else{
                                 didFail(MPConnectError.tokenRefreshDidFail,NSLocalizedString("Token refresh did fail", comment: "Token refresh did fail"))
                                 // You can observe this notification and prompt to auth
-                                NotificationCenter.default.post(name: Notification.MPConnect.authenticationIsRequired, object: nil)
+                                NotificationCenter.default.post(name: Notification.Auth.authenticationIsRequired, object: nil)
                             }
                         })
                     }else{
@@ -330,12 +330,12 @@ public class HTTPClient{
                                 }else{
                                     didFail(MPConnectError.authenticationDidFail, NSLocalizedString("Credentials are not available", comment: "Credentials are not available"))
                                     // You can observe this notification and prompt to auth
-                                    NotificationCenter.default.post(name: Notification.MPConnect.authenticationIsRequired, object: nil)
+                                    NotificationCenter.default.post(name: Notification.Auth.authenticationIsRequired, object: nil)
                                 }
                             }else{
                                 didFail(MPConnectError.tokenRefreshDidFail,NSLocalizedString("Token refresh did fail", comment: "Token refresh did fail"))
                                 // You can observe this notification and prompt to auth
-                                NotificationCenter.default.post(name: Notification.MPConnect.authenticationIsRequired, object: nil)
+                                NotificationCenter.default.post(name: Notification.Auth.authenticationIsRequired, object: nil)
                             }
                         })
                     }else{
