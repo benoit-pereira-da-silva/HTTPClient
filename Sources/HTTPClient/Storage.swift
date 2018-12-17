@@ -33,7 +33,7 @@ open class Storage{
         }
         let query: [String: Any] = [ kSecClass as String: kSecClassInternetPassword,
                                      kSecAttrAccount as String: credentials.account,
-                                     kSecAttrServer as String: client.context.identityServerBaseURL.absoluteString,
+                                     kSecAttrServer as String: client.context.authenticationServerBaseURL.absoluteString,
                                      kSecValueData as String:  credentials.password.data(using: String.Encoding.utf8)!]
         let status = SecItemAdd(query as CFDictionary, nil)
         guard status == errSecSuccess else { throw KeychainError.unhandledError(status: status) }

@@ -7,22 +7,22 @@
 
 import Foundation
 
-public struct AuthDescriptors {
+public struct AuthDescriptors: Codable{
 
-    public var loginDescriptor: HTTPCallDescriptor
+    public var loginDescriptor: RequestDescriptor
 
-    public var logoutDescriptor: HTTPCallDescriptor
+    public var logoutDescriptor: RequestDescriptor
 
-    public var refreshDescriptor: HTTPCallDescriptor?
+    public var refreshDescriptor: RequestDescriptor?
 
-    init(login:HTTPCallDescriptor, logout:HTTPCallDescriptor, refresh: HTTPCallDescriptor) {
+    init(login:RequestDescriptor, logout:RequestDescriptor, refresh: RequestDescriptor) {
         self.loginDescriptor = login
         self.logoutDescriptor = logout
         self.refreshDescriptor = refresh
     }
 }
 
-public struct AuthContext{
+public struct AuthContext: Codable{
 
     // Defines the key to submit the account identifier on Authentication
     public var accountKey:String = "email"
@@ -38,19 +38,19 @@ public struct AuthContext{
 
     //URLs
 
-    public var identityServerBaseURL: URL
+    public var authenticationServerBaseURL: URL
 
     public var apiServerBaseURL: URL
 
     // The call descriptors
-    public var loginDescriptor: HTTPCallDescriptor
+    public var loginDescriptor: RequestDescriptor
 
-    public var logoutDescriptor: HTTPCallDescriptor
+    public var logoutDescriptor: RequestDescriptor
 
-    public var refreshTokenDescriptor: HTTPCallDescriptor?
+    public var refreshTokenDescriptor: RequestDescriptor?
 
     public init(identityServerBaseURL: URL, apiServerBaseURL:URL, descriptors: AuthDescriptors ) {
-        self.identityServerBaseURL = identityServerBaseURL
+        self.authenticationServerBaseURL = identityServerBaseURL
         self.apiServerBaseURL = apiServerBaseURL
         self.loginDescriptor = descriptors.loginDescriptor
         self.logoutDescriptor = descriptors.logoutDescriptor
@@ -58,12 +58,3 @@ public struct AuthContext{
     }
 
 }
-
-
-public extension Notification {
-
-    public struct Auth {
-        static let authenticationIsRequired:Notification.Name = Notification.Name(rawValue: "com.pereira-da-silva.authenticationIsRequired")
-    }
-}
-
