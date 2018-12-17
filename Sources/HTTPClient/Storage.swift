@@ -19,21 +19,21 @@ enum KeychainError: Error {
 
 open class Storage{
 
-    var credentials:Credentials?
+    var credentials: Credentials?
 
     static let shared: Storage = Storage()
 
     init() {}
 
 
-    public func save() throws {
+    public func save(for client: HTTPClient) throws {
         #if !os(Linux)
         guard let credentials: Credentials = self.credentials else{
             return
         }
         let query: [String: Any] = [ kSecClass as String: kSecClassInternetPassword,
                                      kSecAttrAccount as String: credentials.account,
-                                     kSecAttrServer as String: ServicesContext.shared.identityServerBaseURL.absoluteString,
+                                     kSecAttrServer as String: client.context.identityServerBaseURL.absoluteString,
                                      kSecValueData as String:  credentials.password.data(using: String.Encoding.utf8)!]
         let status = SecItemAdd(query as CFDictionary, nil)
         guard status == errSecSuccess else { throw KeychainError.unhandledError(status: status) }
@@ -42,6 +42,7 @@ open class Storage{
 
     public func load() throws{
         #if !os(Linux)
+        //@todo sve the credentials
         #endif
     }
 }
