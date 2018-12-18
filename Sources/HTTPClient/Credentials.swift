@@ -9,6 +9,6 @@
 import Foundation
 
 public struct Credentials: Codable  {
-    var account: String
-    var password: String
+    public var account: String
+    public var password: String
 }

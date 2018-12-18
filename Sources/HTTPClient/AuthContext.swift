@@ -17,7 +17,7 @@ public struct AuthDescriptors: Codable{
 
     public var refreshDescriptor: RequestDescriptor?
 
-    init(login:RequestDescriptor, logout:RequestDescriptor, refresh: RequestDescriptor) {
+    public init(login:RequestDescriptor, logout:RequestDescriptor, refresh: RequestDescriptor) {
         self.loginDescriptor = login
         self.logoutDescriptor = logout
         self.refreshDescriptor = refresh

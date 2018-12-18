@@ -57,8 +57,16 @@ public enum HTTPBodyEncoding:String, Codable{
 }
 
 public struct RequestDescriptor: Codable{
-    var baseURL: URL
-    var method: HTTPMethod
-    var argumentEncoding: ArgumentsEncoding
+
+    public var baseURL: URL
+    public var method: HTTPMethod
+    public var argumentsEncoding: ArgumentsEncoding
+
+
+    public init (baseURL: URL, method: HTTPMethod, argumentEncoding: ArgumentsEncoding){
+        self.baseURL = baseURL
+        self.method = method
+        self.argumentsEncoding = argumentEncoding
+    }
 }
 

@@ -72,7 +72,7 @@ open class HTTPClient{
             // @todo to be generalized
             let request: URLRequest = try self.requestFrom(url: login.baseURL,
                                                            arguments: [self.context.accountKey:account, self.context.passwordKey: password],
-                                                           argumentsEncoding: login.argumentEncoding ,
+                                                           argumentsEncoding: login.argumentsEncoding ,
                                                            method:login.method)
             self.lastAuthAttempt = Date()
             self.call(request: request, resultType: Dictionary<String,String>.self, didSucceed: { (r) in
@@ -108,7 +108,7 @@ open class HTTPClient{
                 if let refreshToken: RequestDescriptor = self.context.refreshTokenDescriptor{
                     let request: URLRequest = try self.requestFrom(url: refreshToken.baseURL,
                                                                    arguments: nil,
-                                                                   argumentsEncoding: refreshToken.argumentEncoding,
+                                                                   argumentsEncoding: refreshToken.argumentsEncoding,
                                                                    method:refreshToken.method)
                     self.lastRefreshAttempt = Date()
                     self.call(request: request, resultType: Dictionary<String,String>.self, didSucceed: { (r) in
@@ -141,7 +141,7 @@ open class HTTPClient{
             let logout:RequestDescriptor =  self.context.logoutDescriptor
             var request: URLRequest = try self.requestFrom(url: logout.baseURL,
                                                            arguments: nil,
-                                                           argumentsEncoding: logout.argumentEncoding
+                                                           argumentsEncoding: logout.argumentsEncoding
                 ,method:logout.method)
             request.setValue("Bearer \(self.accessToken)", forHTTPHeaderField: "Authorization")
             self.call(request: request, resultType: String.self, didSucceed: { (r) in
