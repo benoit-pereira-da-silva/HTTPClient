@@ -35,7 +35,7 @@ public struct AuthContext: Codable{
     // Defines the key used to extract the access token on Authentication
     public var retrieveTokenKey:String = "access_token"
 
-    // If set to true the engine accepts to store the credentials on the client.
+    // If set to true the engine accepts to store the credentials on the client (using Apple's KeyChain)
     public var useReducedSecurityMode: Bool = false
 
     //URLs

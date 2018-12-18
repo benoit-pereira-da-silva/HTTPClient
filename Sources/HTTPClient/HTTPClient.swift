@@ -53,7 +53,7 @@ open class HTTPClient{
 
     required public init (context: AuthContext){
         self.context = context
-        doCatchLog({ () -> () in try Storage.shared.load() })
+        doCatchLog({ () -> () in try Storage.shared.load(for: self) })
     }
 
     /// Authenticate to Bearer token Providers
@@ -79,6 +79,9 @@ open class HTTPClient{
                 // We use a dynamic approach to be able to change the token extraction logic easily
                 if let token:String = r[self.context.retrieveTokenKey]{
                     self.accessToken = token
+                    if self.context.useReducedSecurityMode{
+                        doCatchLog({try Storage.shared.save(for: self) })
+                    }
                     authDidSucceed(NSLocalizedString("Successful authentication", comment: "Successful authentication"))
                 }else{
                     authDidFail(HTTPClientError.missingTokenKey(key: self.context.retrieveTokenKey),"response: \(r)")
