@@ -75,7 +75,7 @@ open class HTTPClient{
                                                            argumentsEncoding: login.argumentEncoding ,
                                                            method:login.method)
             self.lastAuthAttempt = Date()
-            self.callSingle(request: request, resultType: Dictionary<String,String>.self, didSucceed: { (r) in
+            self.call(request: request, resultType: Dictionary<String,String>.self, didSucceed: { (r) in
                 // We use a dynamic approach to be able to change the token extraction logic easily
                 if let token:String = r[self.context.retrieveTokenKey]{
                     self.accessToken = token
@@ -111,7 +111,7 @@ open class HTTPClient{
                                                                    argumentsEncoding: refreshToken.argumentEncoding,
                                                                    method:refreshToken.method)
                     self.lastRefreshAttempt = Date()
-                    self.callSingle(request: request, resultType: Dictionary<String,String>.self, didSucceed: { (r) in
+                    self.call(request: request, resultType: Dictionary<String,String>.self, didSucceed: { (r) in
                         // We use a dynamic approach to be able to change the token extraction logic easily
                         if let token:String = r[self.context.retrieveTokenKey]{
                             self.accessToken = token
@@ -144,7 +144,7 @@ open class HTTPClient{
                                                            argumentsEncoding: logout.argumentEncoding
                 ,method:logout.method)
             request.setValue("Bearer \(self.accessToken)", forHTTPHeaderField: "Authorization")
-            self.callSingle(request: request, resultType: String.self, didSucceed: { (r) in
+            self.call(request: request, resultType: String.self, didSucceed: { (r) in
                 self.accessToken = ""
                 self.lastAuthAttempt = nil
                 self.lastRefreshAttempt = nil
@@ -240,7 +240,7 @@ open class HTTPClient{
     ///   - resultType: the generic result type
     ///   - didSucceed: the success closure
     ///   - didFail: the failure closure
-    open func callSingle<T:Codable>(request:URLRequest,
+    open func call<T:Codable>(request:URLRequest,
                                     resultType: T.Type,
                                     didSucceed: @escaping (T) -> (),
                                     didFail: @escaping (_ error: Error ,_ message: String) -> ()){
@@ -254,13 +254,13 @@ open class HTTPClient{
                 if [401,403].contains(httpURLResponse.statusCode) {
                     if request.url != self.context.loginDescriptor.baseURL && request.url != self.context.refreshTokenDescriptor?.baseURL{
                         self.refresh(refreshDidSucceed: { (_) in
-                            self.callSingle(request: request, resultType: resultType , didSucceed: didSucceed, didFail: didFail)
+                            self.call(request: request, resultType: resultType , didSucceed: didSucceed, didFail: didFail)
                         }, refreshDidFail: { (_, _) in
                             if self.context.useReducedSecurityMode{
                                 // In critical context we should never store the credentials
                                 if let credentials : Credentials = Storage.shared.credentials{
                                     self.authenticate(account: credentials.account, password: credentials.password, authDidSucceed: { (_) in
-                                        self.callSingle(request: request, resultType: resultType, didSucceed: didSucceed, didFail: didFail)
+                                        self.call(request: request, resultType: resultType, didSucceed: didSucceed, didFail: didFail)
                                     }, authDidFail: { (_, _) in
                                         didFail(HTTPClientError.authenticationDidFail, NSLocalizedString("Authentication did fail", comment: "Authentication did fail"))
                                     })
@@ -385,7 +385,7 @@ open class HTTPClient{
 
     open func displayStringResultOf<T:Codable >(request:URLRequest,resultType: T.Type, recipient:StringRecipient){
         doCatchLog ({
-            self.callSingle(request: request, resultType:resultType, didSucceed: { (result) in
+            self.call(request: request, resultType:resultType, didSucceed: { (result) in
                 do{
                     if resultType == String.self{
                         recipient.didReceiveStringResponse(string:result as! String)

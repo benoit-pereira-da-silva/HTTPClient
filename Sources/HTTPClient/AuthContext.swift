@@ -5,7 +5,9 @@
 //  Created by Benoit Pereira da silva on 17/12/2018.
 //
 
+
 import Foundation
+
 
 public struct AuthDescriptors: Codable{
 
@@ -56,5 +58,4 @@ public struct AuthContext: Codable{
         self.logoutDescriptor = descriptors.logoutDescriptor
         self.refreshTokenDescriptor = descriptors.refreshDescriptor
     }
-
 }
