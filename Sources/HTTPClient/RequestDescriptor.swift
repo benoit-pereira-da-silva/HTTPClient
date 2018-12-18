@@ -63,10 +63,10 @@ public struct RequestDescriptor: Codable{
     public var argumentsEncoding: ArgumentsEncoding
 
 
-    public init (baseURL: URL, method: HTTPMethod, argumentEncoding: ArgumentsEncoding){
+    public init (baseURL: URL, method: HTTPMethod, argumentsEncoding: ArgumentsEncoding){
         self.baseURL = baseURL
         self.method = method
-        self.argumentsEncoding = argumentEncoding
+        self.argumentsEncoding = argumentsEncoding
     }
 }
 
