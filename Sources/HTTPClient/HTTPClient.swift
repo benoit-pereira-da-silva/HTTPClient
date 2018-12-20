@@ -6,48 +6,28 @@
 //
 
 import Foundation
+#if !USE_EMBEDDED_MODULES
 import Globals
 import Tolerance
+#endif
 
-struct AuthResponse: Codable {
+struct RAuth:Codable {
     var access_token:String
 }
 
-public enum MPConnectError: Error {
+public enum HTTPClientError: Error {
     case voidData
-    case invalidComponents(components:URLComponents)
-    case invalidURL(url:URL)
+    case invalidComponents(components: URLComponents)
+    case invalidURL(url: URL)
     case httpContextIsInvalid
-    case invalidHTTPStatus(code:Int, message:String)
+    case invalidHTTPStatus(code: Int, message: String)
     case authenticationDidFail
+    case tokenRefreshIsNotSupported
     case tokenRefreshDidFail
+    case missingTokenKey(key: String)
     case securityFailure
 }
 
-
-public enum HTTPMethod: String{
-    case GET
-    case POST
-    case DELETE
-    case PATCH
-    case PUT
-}
-
-public enum ArgumentsEncoding{
-    case queryString
-    case httpBody(type:HTTPBodyEncoding)
-}
-
-public enum HTTPBodyEncoding{
-    case form
-    case json
-}
-
-public struct CallDescriptor{
-    var baseURL:URL
-    var method:HTTPMethod
-    var argumentEncoding:ArgumentsEncoding
-}
 
 public protocol StringRecipient{
     func didReceiveStringResponse(string:String)
@@ -55,28 +35,15 @@ public protocol StringRecipient{
 
 
 public extension Notification {
-
     public struct Auth {
         static let authenticationIsRequired:Notification.Name = Notification.Name(rawValue: "com.pereira-da-silva.authenticationIsRequired")
     }
 }
 
 
-import Foundation
+open class HTTPClient{
 
-public struct Credentials:Codable  {
-    var email:String
-    var password:String
-}
-
-
-
-
-
-
-public class HTTPClient{
-
-    static let shared: HTTPClient = HTTPClient()
+    public var context: AuthContext
 
     public var accessToken: String = ""
 
@@ -84,21 +51,42 @@ public class HTTPClient{
 
     public var lastRefreshAttempt:Date?
 
-    /// Authenticate to MP's Connect MAT system
+    required public init (context: AuthContext){
+        self.context = context
+        doCatchLog({ () -> () in try Storage.shared.load(for: self) })
+    }
+
+    /// Authenticate to Bearer token Providers
     ///
     /// - Parameters:
-    ///   - email: the email
+    ///   - account: the account
     ///   - password: the password
     ///   - didSucceed: the success closure
     ///   - didFail: the failure closure
-    public func authenticate(email:String, password: String, authDidSucceed: @escaping (_ message: String) -> (),  authDidFail: @escaping (_ error: Error ,_ message: String) -> ()) {
+    open func authenticate(account:String,
+                           password: String,
+                           authDidSucceed: @escaping (_ message: String) -> (),
+                           authDidFail: @escaping (_ error: Error ,_ message: String) -> ()) {
         do{
-            let login: CallDescriptor = ServicesContext.login
-            let request: URLRequest = try self.requestFrom(url: login.baseURL, arguments: ["email":email, "password": password], argumentsEncoding: login.argumentEncoding ,method:login.method)
+            let login: RequestDescriptor = self.context.loginDescriptor
+            // @todo to be generalized
+            let request: URLRequest = try self.requestFrom(url: login.baseURL,
+                                                           arguments: [self.context.accountKey:account, self.context.passwordKey: password],
+                                                           argumentsEncoding: login.argumentsEncoding ,
+                                                           method:login.method)
             self.lastAuthAttempt = Date()
-            self.call(request: request, resultType: AuthResponse.self, didSucceed: { (r) in
-                self.accessToken = r.access_token
-                authDidSucceed(NSLocalizedString("Successful authentication", comment: "Successful authentication"))
+            self.call(request: request, resultType: Dictionary<String,String>.self, didSucceed: { (r) in
+                // We use a dynamic approach to be able to change the token extraction logic easily
+                if let token:String = r[self.context.retrieveTokenKey]{
+                    self.accessToken = token
+                    if self.context.useReducedSecurityMode{
+                        doCatchLog({try Storage.shared.save(for: self) })
+                    }
+                    authDidSucceed(NSLocalizedString("Successful authentication", comment: "Successful authentication"))
+                }else{
+                    authDidFail(HTTPClientError.missingTokenKey(key: self.context.retrieveTokenKey),"response: \(r)")
+                }
+
             }, didFail: authDidFail)
         }catch{
             authDidFail(error, "")
@@ -113,19 +101,31 @@ public class HTTPClient{
     ///   - password: the password
     ///   - didSucceed: the success closure
     ///   - didFail: the failure closure
-    public func refresh(refreshDidSucceed: @escaping (_ message: String) -> (),  refreshDidFail: @escaping (_ error: Error ,_ message: String) -> ()) {
+    open func refresh(refreshDidSucceed: @escaping (_ message: String) -> (),
+                      refreshDidFail: @escaping (_ error: Error ,_ message: String) -> ()) {
         do{
             if self.accessToken != ""{
                 // The token can't be refreshed
-                refreshDidFail(MPConnectError.tokenRefreshDidFail, "")
+                refreshDidFail(HTTPClientError.tokenRefreshDidFail, "")
             }else{
-                let refreshToken: CallDescriptor = ServicesContext.refreshToken
-                let request: URLRequest = try self.requestFrom(url: refreshToken.baseURL, arguments: nil, argumentsEncoding: refreshToken.argumentEncoding,method:refreshToken.method)
-                self.lastRefreshAttempt = Date()
-                self.call(request: request, resultType: AuthResponse.self, didSucceed: { (r) in
-                    self.accessToken = r.access_token
-                    refreshDidSucceed(NSLocalizedString("Successful authentication", comment: "Successful authentication"))
-                }, didFail: refreshDidFail)
+                if let refreshToken: RequestDescriptor = self.context.refreshTokenDescriptor{
+                    let request: URLRequest = try self.requestFrom(url: refreshToken.baseURL,
+                                                                   arguments: nil,
+                                                                   argumentsEncoding: refreshToken.argumentsEncoding,
+                                                                   method:refreshToken.method)
+                    self.lastRefreshAttempt = Date()
+                    self.call(request: request, resultType: Dictionary<String,String>.self, didSucceed: { (r) in
+                        // We use a dynamic approach to be able to change the token extraction logic easily
+                        if let token:String = r[self.context.retrieveTokenKey]{
+                            self.accessToken = token
+                            refreshDidSucceed(NSLocalizedString("Successful token refresh", comment: "Successful token refresh"))
+                        }else{
+                            refreshDidFail(HTTPClientError.missingTokenKey(key: self.context.retrieveTokenKey),"response: \(r)")
+                        }
+                    }, didFail: refreshDidFail)
+                }else{
+                    refreshDidFail(HTTPClientError.tokenRefreshIsNotSupported, "")
+                }
             }
         }catch{
             refreshDidFail(error, "")
@@ -138,10 +138,14 @@ public class HTTPClient{
     /// - Parameters:
     ///   - didSucceed: the success closure
     ///   - didFail: the failure closure
-    public func logout(didSucceed: @escaping (_ message: String) -> (), didFail: @escaping (_ error: Error ,_ message: String) -> ()){
+    open func logout(didSucceed: @escaping (_ message: String) -> (),
+                     didFail: @escaping (_ error: Error ,_ message: String) -> ()){
         do{
-            let logout:CallDescriptor = ServicesContext.logout
-            var request: URLRequest = try HTTPClient.shared.requestFrom(url: logout.baseURL, arguments: nil, argumentsEncoding: logout.argumentEncoding,method:logout.method)
+            let logout:RequestDescriptor =  self.context.logoutDescriptor
+            var request: URLRequest = try self.requestFrom(url: logout.baseURL,
+                                                           arguments: nil,
+                                                           argumentsEncoding: logout.argumentsEncoding
+                ,method:logout.method)
             request.setValue("Bearer \(self.accessToken)", forHTTPHeaderField: "Authorization")
             self.call(request: request, resultType: String.self, didSucceed: { (r) in
                 self.accessToken = ""
@@ -165,9 +169,16 @@ public class HTTPClient{
     ///   - method: the HTTP method
     /// - Returns: the request with the authorization token
     /// - Throws:  on URL & request issue
-    public func authorizedRequest(route:String, arguments: Dictionary<String,String>?, argumentsEncoding: ArgumentsEncoding = .queryString, method: HTTPMethod = HTTPMethod.GET) throws -> URLRequest{
-        let route:URL = ServicesContext.apiServerBaseURL.appendingPathComponent(route)
-        var request: URLRequest = try self.requestFrom(url: route, arguments: arguments, argumentsEncoding: argumentsEncoding, method: method)
+    open func authorizedRequest(route:String,
+                                arguments: Dictionary<String,String>?,
+                                argumentsEncoding: ArgumentsEncoding = .queryString,
+                                method: HTTPMethod = HTTPMethod.GET) throws -> URLRequest{
+
+        let route:URL = self.context.apiServerBaseURL.appendingPathComponent(route)
+        var request: URLRequest = try self.requestFrom(url: route,
+                                                       arguments: arguments,
+                                                       argumentsEncoding: argumentsEncoding,
+                                                       method: method)
         request.setValue("Bearer \(self.accessToken)", forHTTPHeaderField: "Authorization")
         return request
     }
@@ -178,13 +189,16 @@ public class HTTPClient{
     ///   - url: the url
     ///   - arguments: the arguments as a dictionary
     /// - Returns: the Request
-    public func requestFrom(url:URL, arguments: Dictionary<String,String>?,argumentsEncoding: ArgumentsEncoding = .queryString, method: HTTPMethod = HTTPMethod.GET) throws-> URLRequest{
+    open func requestFrom(url:URL,
+                          arguments: Dictionary<String,String>?,
+                          argumentsEncoding: ArgumentsEncoding = .queryString,
+                          method: HTTPMethod = HTTPMethod.GET) throws-> URLRequest{
 
         switch argumentsEncoding {
         case .queryString:
 
             guard var components : URLComponents = URLComponents(url: url , resolvingAgainstBaseURL: false) else{
-                throw MPConnectError.invalidURL(url: url)
+                throw HTTPClientError.invalidURL(url: url)
             }
             if let queryItems:Dictionary<String,String> = arguments{
                 components.queryItems = [URLQueryItem]()
@@ -193,7 +207,7 @@ public class HTTPClient{
                 }
             }
             guard let url:URL = components.url else {
-                throw MPConnectError.invalidComponents(components: components)
+                throw HTTPClientError.invalidComponents(components: components)
             }
             var request: URLRequest =  URLRequest(url: url)
             request.httpMethod = method.rawValue
@@ -222,43 +236,44 @@ public class HTTPClient{
     }
 
 
-
     /// Invoke generic request facility
-    /// You can use resultType: String.self
     ///
     /// - Parameters:
     ///   - request: the request
     ///   - resultType: the generic result type
     ///   - didSucceed: the success closure
     ///   - didFail: the failure closure
-    public func call<T:Codable>(request:URLRequest, resultType: T.Type, didSucceed: @escaping (T) -> (), didFail: @escaping (_ error: Error ,_ message: String) -> ()){
+    open func call<T:Codable>(request:URLRequest,
+                                    resultType: T.Type,
+                                    didSucceed: @escaping (T) -> (),
+                                    didFail: @escaping (_ error: Error ,_ message: String) -> ()){
         //log("\(request.httpMethod?.uppercased() ?? "" ) \(request.url!) \(String(data: request.httpBody!, encoding: .utf8))")
         let task = URLSession.shared.dataTask(with: request){ (data, response, error) in
             syncOnMain {
                 guard let httpURLResponse = response as? HTTPURLResponse else{
-                    didFail(MPConnectError.httpContextIsInvalid, NSLocalizedString("The response is not a HTTP response.", comment: "The response is not a HTTP response."))
+                    didFail(HTTPClientError.httpContextIsInvalid, NSLocalizedString("The response is not a HTTP response.", comment: "The response is not a HTTP response."))
                     return
                 }
                 if [401,403].contains(httpURLResponse.statusCode) {
-                    if request.url != ServicesContext.login.baseURL && request.url != ServicesContext.refreshToken.baseURL{
+                    if request.url != self.context.loginDescriptor.baseURL && request.url != self.context.refreshTokenDescriptor?.baseURL{
                         self.refresh(refreshDidSucceed: { (_) in
                             self.call(request: request, resultType: resultType , didSucceed: didSucceed, didFail: didFail)
                         }, refreshDidFail: { (_, _) in
-                            if ServicesContext.REDUCED_SECURITY_MODE{
+                            if self.context.useReducedSecurityMode{
                                 // In critical context we should never store the credentials
                                 if let credentials : Credentials = Storage.shared.credentials{
-                                    self.authenticate(email: credentials.email, password: credentials.password, authDidSucceed: { (_) in
+                                    self.authenticate(account: credentials.account, password: credentials.password, authDidSucceed: { (_) in
                                         self.call(request: request, resultType: resultType, didSucceed: didSucceed, didFail: didFail)
                                     }, authDidFail: { (_, _) in
-                                        didFail(MPConnectError.authenticationDidFail, NSLocalizedString("Authentication did fail", comment: "Authentication did fail"))
+                                        didFail(HTTPClientError.authenticationDidFail, NSLocalizedString("Authentication did fail", comment: "Authentication did fail"))
                                     })
                                 }else{
-                                    didFail(MPConnectError.authenticationDidFail, NSLocalizedString("Credentials are not available", comment: "Credentials are not available"))
+                                    didFail(HTTPClientError.authenticationDidFail, NSLocalizedString("Credentials are not available", comment: "Credentials are not available"))
                                     // You can observe this notification and prompt to auth
                                     NotificationCenter.default.post(name: Notification.Auth.authenticationIsRequired, object: nil)
                                 }
                             }else{
-                                didFail(MPConnectError.tokenRefreshDidFail,NSLocalizedString("Token refresh did fail", comment: "Token refresh did fail"))
+                                didFail(HTTPClientError.tokenRefreshDidFail,NSLocalizedString("Token refresh did fail", comment: "Token refresh did fail"))
                                 // You can observe this notification and prompt to auth
                                 NotificationCenter.default.post(name: Notification.Auth.authenticationIsRequired, object: nil)
                             }
@@ -266,12 +281,12 @@ public class HTTPClient{
                     }else{
                         // It is a refresh token or a login call
                         // There is nothing to do
-                        didFail(MPConnectError.securityFailure,"")
+                        didFail(HTTPClientError.securityFailure,"")
                     }
                 }else{
                     guard 200...299 ~= httpURLResponse.statusCode else{
                         // Todo give a relevent message
-                        didFail(MPConnectError.invalidHTTPStatus(code: httpURLResponse.statusCode, message: ""), NSLocalizedString("Invalid", comment: "Invalid."))
+                        didFail(HTTPClientError.invalidHTTPStatus(code: httpURLResponse.statusCode, message: ""), NSLocalizedString("Invalid", comment: "Invalid."))
                         return
                     }
                     if let data = data{
@@ -287,7 +302,7 @@ public class HTTPClient{
                             didFail(error, NSLocalizedString("Deserialization did fail", comment: "Deserialization did fail"))
                         }
                     }else{
-                        didFail(MPConnectError.voidData, NSLocalizedString("Void data", comment: "Void data"))
+                        didFail(HTTPClientError.voidData, NSLocalizedString("Void data", comment: "Void data"))
                     }
                 }
 
@@ -306,34 +321,37 @@ public class HTTPClient{
     ///   - resultType: the generic result Array<T> type
     ///   - didSucceed: the success closure
     ///   - didFail: the failure closure
-    public func call<T:Codable>(request:URLRequest,resultType: [T].Type, didSucceed: @escaping ([T]) -> (), didFail: @escaping (_ error: Error ,_ message: String) -> ()){
+    open func call<T:Codable>(request:URLRequest,
+                              resultType: [T].Type,
+                              didSucceed: @escaping ([T]) -> (),
+                              didFail: @escaping (_ error: Error ,_ message: String) -> ()){
         //log(request.url)
         let task = URLSession.shared.dataTask(with: request){ (data, response, error) in
             syncOnMain {
                 guard let httpURLResponse = response as? HTTPURLResponse else{
-                    didFail(MPConnectError.httpContextIsInvalid, NSLocalizedString("The response is not a HTTP response.", comment: "The response is not a HTTP response."))
+                    didFail(HTTPClientError.httpContextIsInvalid, NSLocalizedString("The response is not a HTTP response.", comment: "The response is not a HTTP response."))
                     return
                 }
                 if [401,403].contains(httpURLResponse.statusCode) {
-                    if request.url != ServicesContext.login.baseURL && request.url != ServicesContext.refreshToken.baseURL{
+                    if request.url != self.context.loginDescriptor.baseURL && request.url != self.context.refreshTokenDescriptor?.baseURL{
                         self.refresh(refreshDidSucceed: { (_) in
                             self.call(request: request, resultType: resultType , didSucceed: didSucceed, didFail: didFail)
                         }, refreshDidFail: { (_, _) in
-                            if ServicesContext.REDUCED_SECURITY_MODE{
+                            if self.context.useReducedSecurityMode{
                                 // In critical context we should never store the credentials
                                 if let credentials : Credentials = Storage.shared.credentials{
-                                    self.authenticate(email: credentials.email, password: credentials.password, authDidSucceed: { (_) in
+                                    self.authenticate(account: credentials.account, password: credentials.password, authDidSucceed: { (_) in
                                         self.call(request: request, resultType: resultType, didSucceed: didSucceed, didFail: didFail)
                                     }, authDidFail: { (_, _) in
-                                        didFail(MPConnectError.authenticationDidFail, NSLocalizedString("Authentication did fail", comment: "Authentication did fail"))
+                                        didFail(HTTPClientError.authenticationDidFail, NSLocalizedString("Authentication did fail", comment: "Authentication did fail"))
                                     })
                                 }else{
-                                    didFail(MPConnectError.authenticationDidFail, NSLocalizedString("Credentials are not available", comment: "Credentials are not available"))
+                                    didFail(HTTPClientError.authenticationDidFail, NSLocalizedString("Credentials are not available", comment: "Credentials are not available"))
                                     // You can observe this notification and prompt to auth
                                     NotificationCenter.default.post(name: Notification.Auth.authenticationIsRequired, object: nil)
                                 }
                             }else{
-                                didFail(MPConnectError.tokenRefreshDidFail,NSLocalizedString("Token refresh did fail", comment: "Token refresh did fail"))
+                                didFail(HTTPClientError.tokenRefreshDidFail,NSLocalizedString("Token refresh did fail", comment: "Token refresh did fail"))
                                 // You can observe this notification and prompt to auth
                                 NotificationCenter.default.post(name: Notification.Auth.authenticationIsRequired, object: nil)
                             }
@@ -341,13 +359,13 @@ public class HTTPClient{
                     }else{
                         // It is a refresh token or a login call
                         // There is nothing to do
-                        didFail(MPConnectError.securityFailure,"")
+                        didFail(HTTPClientError.securityFailure,"")
                     }
                 }else{
 
                     guard 200...299 ~= httpURLResponse.statusCode else{
                         // Todo give a relevent message
-                        didFail(MPConnectError.invalidHTTPStatus(code: httpURLResponse.statusCode, message: ""), NSLocalizedString("Invalid", comment: "Invalid."))
+                        didFail(HTTPClientError.invalidHTTPStatus(code: httpURLResponse.statusCode, message: ""), NSLocalizedString("Invalid", comment: "Invalid."))
                         return
                     }
                     if let data = data{
@@ -358,7 +376,7 @@ public class HTTPClient{
                             didFail(error, NSLocalizedString("Deserialization did fail", comment: "Deserialization did fail"))
                         }
                     }else{
-                        didFail(MPConnectError.voidData, NSLocalizedString("Void data", comment: "Void data"))
+                        didFail(HTTPClientError.voidData, NSLocalizedString("Void data", comment: "Void data"))
                     }
                 }
             }
@@ -366,12 +384,11 @@ public class HTTPClient{
         task.resume()
     }
 
-
     // MARK: - String Recipient
 
-    func displayStringResultOf<T:Codable >(request:URLRequest,resultType: T.Type, recipient:StringRecipient){
+    open func displayStringResultOf<T:Codable >(request:URLRequest,resultType: T.Type, recipient:StringRecipient){
         doCatchLog ({
-            HTTPClient.shared.call(request: request, resultType:resultType, didSucceed: { (result) in
+            self.call(request: request, resultType:resultType, didSucceed: { (result) in
                 do{
                     if resultType == String.self{
                         recipient.didReceiveStringResponse(string:result as! String)
@@ -392,5 +409,4 @@ public class HTTPClient{
             })
         })
     }
-
 }
