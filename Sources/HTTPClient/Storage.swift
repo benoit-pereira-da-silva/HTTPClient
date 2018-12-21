@@ -21,13 +21,12 @@ enum KeychainError: Error {
 // The Storage uses:
 // 1. UserDefaults.standard to store the default account
 // 2. the Keychain to store the password
-public class Storage{
+public struct Storage{
 
-    // The associated credentials
-    var credentials: Credentials?
 
-    // The singleton instance
-    static let shared: Storage = Storage()
+    fileprivate static func _accountKeyFor(_ client:HTTPClient)->String{
+        return "\(client.context.credentials.account)_" + client.context.authenticationServerBaseURL.absoluteString
+    }
 
     /// Saves the default account in the UserDefaults.standard
     /// And the associated password in the KeyChain
@@ -35,18 +34,21 @@ public class Storage{
     /// - Parameter client: the concerned HTTPClient that defines the associated Identity server URL
     /// - Throws: KeychainError.noCredentials if there is no credentials.
     /// - Throws: KeychainError.unhandledError(...) on key chain access errors.
-    public func save(for client: HTTPClient) throws {
+    public static func save(_ client: HTTPClient) throws {
         #if !os(Linux)
-        guard let credentials: Credentials = self.credentials else{
-            throw KeychainError.noCredentials
-        }
-        UserDefaults.standard.set(credentials.account, forKey: "defaultAccount@" + client.context.authenticationServerBaseURL.absoluteString)
+        let credentials: Credentials = client.context.credentials
+        guard credentials.isNotVoid else{ throw KeychainError.noCredentials }
+        UserDefaults.standard.set(credentials.account, forKey: self._accountKeyFor(client))
 
         let query: CFDictionary =  [ kSecClass as String: kSecClassInternetPassword,
                                      kSecAttrAccount as String: credentials.account,
                                      kSecAttrServer as String: client.context.authenticationServerBaseURL.absoluteString,
                                      kSecValueData as String:  credentials.password.data(using: String.Encoding.utf8)!] as CFDictionary
-        let status = SecItemAdd(query,  nil)
+        var status = SecItemAdd(query,  nil)
+        if status == errSecDuplicateItem{
+            doCatchLog({ try self.delete(client)})
+            status = SecItemAdd(query,  nil)
+        }
         guard status == errSecSuccess else { throw KeychainError.unhandledError(status: status) }
         #endif
     }
@@ -58,24 +60,22 @@ public class Storage{
     /// - Parameter client: the concerned HTTPClient that defines the associated Identity server URL
     /// - Throws: KeychainError.noCredentials if there is neither a credential nor an account in the UserDefaults.
     /// - Throws: KeychainError.unhandledError(...) on key chain access errors.
-    public func load(for client: HTTPClient) throws  {
+    public static func load(_ client: HTTPClient) throws  {
         #if !os(Linux)
-        guard let account : String = self.credentials?.account ?? UserDefaults.standard.string(forKey:"defaultAccount@" + client.context.authenticationServerBaseURL.absoluteString) else{
-            throw KeychainError.noCredentials
-        }
+        let credentials: Credentials = client.context.credentials
+        guard credentials.isNotVoid else{ throw KeychainError.noCredentials }
         let query: CFDictionary = [ kSecClass as String: kSecClassInternetPassword,
                                     kSecAttrServer as String: client.context.authenticationServerBaseURL.absoluteString,
-                                    kSecAttrAccount as String: account,
+                                    kSecAttrAccount as String: credentials.account,
                                     kSecReturnData as String : kCFBooleanTrue,
                                     kSecMatchLimit as String : kSecMatchLimitOne ] as CFDictionary
         var result: AnyObject?
         let code: OSStatus = withUnsafeMutablePointer(to: &result) {
             SecItemCopyMatching(query as CFDictionary, UnsafeMutablePointer($0))
         }
-        guard let data:Data = result as? Data , let password: String =  String(data: data, encoding: .utf8)else{
+        guard let data:Data = result as? Data , let _: String =  String(data: data, encoding: .utf8) else{
             throw KeychainError.unhandledError(status: code)
         }
-        self.credentials?.password = password
         #endif
     }
 
@@ -85,15 +85,14 @@ public class Storage{
     /// - Parameter client: the concerned HTTPClient that defines the associated Identity server URL
     /// - Throws: KeychainError.noCredentials if there is neither a credential nor an account in the UserDefaults.
     /// - Throws: KeychainError.unhandledError(...) on key chain deletion errors.
-    public func delete(for client: HTTPClient) throws{
+    public static func delete(_ client: HTTPClient) throws{
         #if !os(Linux)
-        guard let account : String = self.credentials?.account ?? UserDefaults.standard.string(forKey:"defaultAccount@" + client.context.authenticationServerBaseURL.absoluteString) else{
-            throw KeychainError.noCredentials
-        }
-        UserDefaults.standard.removeObject(forKey: "account@" + client.context.authenticationServerBaseURL.absoluteString)
+        let credentials: Credentials = client.context.credentials
+        guard credentials.isNotVoid else{ throw KeychainError.noCredentials }
+        UserDefaults.standard.removeObject(forKey: self._accountKeyFor(client))
         let query: CFDictionary = [ kSecClass as String: kSecClassInternetPassword,
                                     kSecAttrServer as String: client.context.authenticationServerBaseURL.absoluteString,
-                                    kSecAttrAccount as String: account] as CFDictionary
+                                    kSecAttrAccount as String: credentials.account] as CFDictionary
 
         let status = SecItemDelete(query)
         guard status == errSecSuccess else { throw KeychainError.unhandledError(status: status) }

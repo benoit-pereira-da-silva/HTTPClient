@@ -53,7 +53,7 @@ open class HTTPClient{
 
     required public init (context: AuthContext){
         self.context = context
-        doCatchLog({ () -> () in try Storage.shared.load(for: self) })
+        doCatchLog({ () -> () in try Storage.load(self) })
     }
 
     /// Authenticate to Bearer token Providers
@@ -80,7 +80,7 @@ open class HTTPClient{
                 if let token:String = r[self.context.retrieveTokenKey]{
                     self.accessToken = token
                     if self.context.useReducedSecurityMode{
-                        doCatchLog({try Storage.shared.save(for: self) })
+                        doCatchLog({try Storage.save(self) })
                     }
                     authDidSucceed(NSLocalizedString("Successful authentication", comment: "Successful authentication"))
                 }else{
@@ -261,14 +261,14 @@ open class HTTPClient{
                         }, refreshDidFail: { (_, _) in
                             if self.context.useReducedSecurityMode{
                                 // In critical context we should never store the credentials
-                                if let credentials : Credentials = Storage.shared.credentials{
-                                    self.authenticate(account: credentials.account, password: credentials.password, authDidSucceed: { (_) in
+                                if self.context.credentials.isNotVoid{
+                                    self.authenticate(account: self.context.credentials.account, password: self.context.credentials.password, authDidSucceed: { (_) in
                                         self.call(request: request, resultType: resultType, didSucceed: didSucceed, didFail: didFail)
                                     }, authDidFail: { (_, _) in
                                         didFail(HTTPClientError.authenticationDidFail, NSLocalizedString("Authentication did fail", comment: "Authentication did fail"))
                                     })
                                 }else{
-                                    didFail(HTTPClientError.authenticationDidFail, NSLocalizedString("Credentials are not available", comment: "Credentials are not available"))
+                                    didFail(HTTPClientError.authenticationDidFail, NSLocalizedString("Credentials are void", comment: "Credentials are void"))
                                     // You can observe this notification and prompt to auth
                                     NotificationCenter.default.post(name: Notification.Auth.authenticationIsRequired, object: nil)
                                 }
@@ -339,14 +339,14 @@ open class HTTPClient{
                         }, refreshDidFail: { (_, _) in
                             if self.context.useReducedSecurityMode{
                                 // In critical context we should never store the credentials
-                                if let credentials : Credentials = Storage.shared.credentials{
-                                    self.authenticate(account: credentials.account, password: credentials.password, authDidSucceed: { (_) in
+                                if self.context.credentials.isNotVoid{
+                                    self.authenticate(account:  self.context.credentials.account, password:  self.context.credentials.password, authDidSucceed: { (_) in
                                         self.call(request: request, resultType: resultType, didSucceed: didSucceed, didFail: didFail)
                                     }, authDidFail: { (_, _) in
                                         didFail(HTTPClientError.authenticationDidFail, NSLocalizedString("Authentication did fail", comment: "Authentication did fail"))
                                     })
                                 }else{
-                                    didFail(HTTPClientError.authenticationDidFail, NSLocalizedString("Credentials are not available", comment: "Credentials are not available"))
+                                    didFail(HTTPClientError.authenticationDidFail, NSLocalizedString("Credentials are void", comment: "Credentials are void"))
                                     // You can observe this notification and prompt to auth
                                     NotificationCenter.default.post(name: Notification.Auth.authenticationIsRequired, object: nil)
                                 }

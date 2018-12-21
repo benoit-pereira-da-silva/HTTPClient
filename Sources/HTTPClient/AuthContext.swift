@@ -26,6 +26,9 @@ public struct AuthDescriptors: Codable{
 
 public struct AuthContext: Codable{
 
+    // The associated credentials
+    var credentials: Credentials = Credentials(account: "", password: "")
+
     // Defines the key to submit the account identifier on Authentication
     public var accountKey:String = "email"
 
