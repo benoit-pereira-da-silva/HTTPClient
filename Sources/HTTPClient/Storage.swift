@@ -8,6 +8,7 @@
 import Foundation
 #if !USE_EMBEDDED_MODULES
 import Globals
+import HMAC
 #endif
 import Security
 
@@ -25,7 +26,7 @@ public struct Storage{
 
 
     fileprivate static func _accountKeyFor(_ client:HTTPClient)->String{
-        return "\(client.context.credentials.account)_" + client.context.authenticationServerBaseURL.absoluteString
+        return "\(client.context.credentials.account)_\(client.context.authenticationServerBaseURL.absoluteString)".md5
     }
 
     /// Saves the default account in the UserDefaults.standard
@@ -62,7 +63,10 @@ public struct Storage{
     /// - Throws: KeychainError.unhandledError(...) on key chain access errors.
     public static func load(_ client: HTTPClient) throws  {
         #if !os(Linux)
-        let credentials: Credentials = client.context.credentials
+        var credentials: Credentials = client.context.credentials
+        if credentials.account.count == 0 {
+             credentials.account =? UserDefaults.standard.string(forKey: self._accountKeyFor(client))
+        }
         guard credentials.isNotVoid else{ throw KeychainError.noCredentials }
         let query: CFDictionary = [ kSecClass as String: kSecClassInternetPassword,
                                     kSecAttrServer as String: client.context.authenticationServerBaseURL.absoluteString,
