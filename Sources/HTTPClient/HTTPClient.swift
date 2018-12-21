@@ -11,9 +11,6 @@ import Globals
 import Tolerance
 #endif
 
-struct RAuth:Codable {
-    var access_token:String
-}
 
 public enum HTTPClientError: Error {
     case voidData
