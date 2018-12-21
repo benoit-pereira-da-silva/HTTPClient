@@ -12,15 +12,16 @@ let package = Package(
             targets: ["HTTPClient"]),
     ],
     dependencies: [
-        .package(url:"https://github.com/Bartlebys/Globals", from: "1.0.0"),
-        .package(url:"https://github.com/Bartlebys/Tolerance", from: "1.0.0"),
+        .package(url:"https://github.com/benoit-pereira-da-silva/HMAC", from: "1.0.0"),
+        .package(url:"https://github.com/benoit-pereira-da-silva/Globals", from: "1.0.0"),
+        .package(url:"https://github.com/benoit-pereira-da-silva/Tolerance", from: "1.0.0"),
     ],
     targets: [
         // Targets are the basic building blocks of a package. A target can define a module or a test suite.
         // Targets can depend on other targets in this package, and on products in packages which this package depends on.
         .target(
             name: "HTTPClient",
-            dependencies: ["Globals","Tolerance"]),
+            dependencies: ["HMAC","Globals","Tolerance"]),
         .testTarget(
             name: "HTTPClientTests",
             dependencies: ["HTTPClient"]),
