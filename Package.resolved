@@ -11,6 +11,15 @@
         }
       },
       {
+        "package": "HMAC",
+        "repositoryURL": "https://github.com/benoit-pereira-da-silva/HMAC",
+        "state": {
+          "branch": null,
+          "revision": "3b6bd26f1b24caaa152a38c7ed2f38bff62f480e",
+          "version": "1.0.1"
+        }
+      },
+      {
         "package": "Tolerance",
         "repositoryURL": "https://github.com/Bartlebys/Tolerance",
         "state": {
