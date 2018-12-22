@@ -2,14 +2,29 @@ import XCTest
 @testable import HTTPClient
 
 final class HTTPClientTests: XCTestCase {
-    func testExample() {
-        // This is an example of a functional test case.
-        // Use XCTAssert and related functions to verify your tests produce the correct
-        // results.
-        XCTAssertEqual(HTTPClient().text, "Hello, World!")
+
+    let client:HTTPClient = HTTPClient(context: AuthContext.default)
+
+    func test_001_storage_save() {
+        let storage:Storage = Storage.shared
+        do{
+            try storage.load(for: client)
+            XCTFail("Storage.load should fail")
+        }catch{
+            // OK
+        }
+        storage.credentials?.account = "alfred@apple.com"
+        storage.credentials?.password = "pschittt1984"
+
+        do{
+            try storage.save(for: client)
+            XCTFail("Storage.load should fail")
+        }catch{
+            // OK
+        }
     }
 
     static var allTests = [
-        ("testExample", testExample),
+        ("test_001_storage_save", test_001_storage_save),
     ]
 }

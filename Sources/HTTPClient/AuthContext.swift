@@ -58,4 +58,31 @@ public struct AuthContext: Codable{
         self.logoutDescriptor = descriptors.logoutDescriptor
         self.refreshTokenDescriptor = descriptors.refreshDescriptor
     }
+
+    public static var `default` : AuthContext{
+
+        let defaultIDServerURL : URL = URL(string: "https://your-id-server.com")!
+        let defaultAPIServerURL: URL = URL(string: "https://your-api-server.com")!
+
+        let login:RequestDescriptor = RequestDescriptor(baseURL:defaultIDServerURL.appendingPathComponent("/login"),
+                                                        method:.POST,
+                                                        argumentsEncoding:.httpBody(type:.form))
+
+        // There is no arguments currently to encode so we set Query string by default
+        let logout:RequestDescriptor = RequestDescriptor(baseURL:defaultIDServerURL.appendingPathComponent("/token"),
+                                                         method:.DELETE,
+                                                         argumentsEncoding:.queryString)
+
+        // There is no arguments currently to encode so we set Query string by default
+        let refresh:RequestDescriptor = RequestDescriptor(baseURL:defaultIDServerURL.appendingPathComponent("/refresh"),
+                                                          method:.GET,
+                                                          argumentsEncoding:.queryString)
+
+        let descriptors:AuthDescriptors = AuthDescriptors(login: login, logout: logout, refresh: refresh)
+
+        return AuthContext.init(identityServerBaseURL: defaultIDServerURL,
+                                apiServerBaseURL:defaultAPIServerURL,
+                                descriptors:descriptors )
+
+    }
 }
