@@ -32,7 +32,7 @@ public protocol StringRecipient{
 
 
 public extension Notification {
-    public struct Auth {
+    struct Auth {
         static let authenticationIsRequired:Notification.Name = Notification.Name(rawValue: "com.pereira-da-silva.authenticationIsRequired")
     }
 }

@@ -71,7 +71,7 @@ public struct Storage{
         let query: CFDictionary = [ kSecClass as String: kSecClassInternetPassword,
                                     kSecAttrServer as String: client.context.authenticationServerBaseURL.absoluteString,
                                     kSecAttrAccount as String: credentials.account,
-                                    kSecReturnData as String : kCFBooleanTrue,
+                                    kSecReturnData as String : true,
                                     kSecMatchLimit as String : kSecMatchLimitOne ] as CFDictionary
         var result: AnyObject?
         let code: OSStatus = withUnsafeMutablePointer(to: &result) {
