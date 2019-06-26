@@ -48,7 +48,7 @@ open class HTTPClient{
 
     public var lastRefreshAttempt:Date?
 
-    required public init (context: AuthContext){
+    public init (context: AuthContext){
         self.context = context
         doCatchLog({ () -> () in try Storage.load(self) })
     }
@@ -155,30 +155,6 @@ open class HTTPClient{
         }
     }
 
-
-
-    /// Returns the request for a given route with the Token
-    ///
-    /// - Parameters:
-    ///   - route: e.g '/user/me'
-    ///   - arguments: a dictionary to be passed
-    ///   - arguemtsEncoding; queryString or body
-    ///   - method: the HTTP method
-    /// - Returns: the request with the authorization token
-    /// - Throws:  on URL & request issue
-    open func authorizedRequest(route:String,
-                                arguments: Dictionary<String,String>?,
-                                argumentsEncoding: ArgumentsEncoding = .queryString,
-                                method: HTTPMethod = HTTPMethod.GET) throws -> URLRequest{
-
-        let route:URL = self.context.apiServerBaseURL.appendingPathComponent(route)
-        var request: URLRequest = try self.requestFrom(url: route,
-                                                       arguments: arguments,
-                                                       argumentsEncoding: argumentsEncoding,
-                                                       method: method)
-        request.setValue("Bearer \(self.accessToken)", forHTTPHeaderField: "Authorization")
-        return request
-    }
 
     /// Returns an url request from an URL
     ///

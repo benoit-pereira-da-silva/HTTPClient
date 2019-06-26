@@ -30,10 +30,14 @@ public struct AuthContext: Codable{
     var credentials: Credentials = Credentials(account: "", password: "")
 
     // Defines the key to submit the account identifier on Authentication
-    public var accountKey:String = "email"
+    public var accountKey:String = "account"
 
     // Defines the key to submit the password on Authentication
     public var passwordKey:String = "password"
+
+    // Defines
+    public var groupKey:String = "group"
+
 
     // Defines the key used to extract the access token on Authentication
     public var retrieveTokenKey:String = "access_token"
@@ -45,8 +49,6 @@ public struct AuthContext: Codable{
 
     public var authenticationServerBaseURL: URL
 
-    public var apiServerBaseURL: URL
-
     // The call descriptors
     public var loginDescriptor: RequestDescriptor
 
@@ -54,9 +56,8 @@ public struct AuthContext: Codable{
 
     public var refreshTokenDescriptor: RequestDescriptor?
 
-    public init(identityServerBaseURL: URL, apiServerBaseURL:URL, descriptors: AuthDescriptors ) {
+    public init(identityServerBaseURL: URL, descriptors: AuthDescriptors ) {
         self.authenticationServerBaseURL = identityServerBaseURL
-        self.apiServerBaseURL = apiServerBaseURL
         self.loginDescriptor = descriptors.loginDescriptor
         self.logoutDescriptor = descriptors.logoutDescriptor
         self.refreshTokenDescriptor = descriptors.refreshDescriptor
@@ -65,8 +66,6 @@ public struct AuthContext: Codable{
     public static var `default` : AuthContext{
 
         let defaultIDServerURL : URL = URL(string: "https://your-id-server.com")!
-        let defaultAPIServerURL: URL = URL(string: "https://your-api-server.com")!
-
         let login:RequestDescriptor = RequestDescriptor(baseURL:defaultIDServerURL.appendingPathComponent("/login"),
                                                         method:.POST,
                                                         argumentsEncoding:.httpBody(type:.form))
@@ -83,9 +82,7 @@ public struct AuthContext: Codable{
 
         let descriptors:AuthDescriptors = AuthDescriptors(login: login, logout: logout, refresh: refresh)
 
-        return AuthContext.init(identityServerBaseURL: defaultIDServerURL,
-                                apiServerBaseURL:defaultAPIServerURL,
-                                descriptors:descriptors )
+        return AuthContext.init(identityServerBaseURL: defaultIDServerURL, descriptors:descriptors )
 
     }
 }
