@@ -61,7 +61,7 @@ open class HTTPClient{
     ///   - password: the password
     ///   - didSucceed: the success closure
     ///   - didFail: the failure closure
-    open func authenticate(account:String,
+    open func authenticate(account: String,
                            password: String,
                            authDidSucceed: @escaping (_ message: String) -> (),
                            authDidFail: @escaping (_ error: Error ,_ message: String) -> ()) {
@@ -163,7 +163,7 @@ open class HTTPClient{
     ///   - url: the url
     ///   - arguments: the arguments as a dictionary
     /// - Returns: the Request
-    open func requestFrom(url:URL,
+    open func requestFrom(url: URL,
                           arguments: Dictionary<String,String>?,
                           argumentsEncoding: ArgumentsEncoding = .queryString,
                           method: HTTPMethod = HTTPMethod.GET) throws-> URLRequest{
@@ -303,7 +303,7 @@ open class HTTPClient{
     ///   - didSucceed: the success closure
     ///   - didFail: the failure closure
     ///   - nbOfAttempts: if set to 0 there in case of security issue there would be no more calls
-    open func call<T:Codable>(request:URLRequest,
+    open func call<T:Codable>(request: URLRequest,
                               resultType: [T].Type,
                               didSucceed: @escaping ([T]) -> (),
                               didFail: @escaping (_ error: Error ,_ message: String) -> (),
@@ -380,7 +380,7 @@ open class HTTPClient{
     ///   - didSucceed: the success closure that contains the local file URL
     ///   - didFail: the failure closure
     ///   - nbOfAttempts: if set to 0 there in case of security issue there would be no more calls
-    open func download( request:URLRequest,
+    open func download( request: URLRequest,
                         didSucceed: @escaping (_ fileUrl: URL) -> (),
                         didFail: @escaping (_ error: Error ,_ message: String) -> (),
                         nbOfAttempts: Int = 3){
