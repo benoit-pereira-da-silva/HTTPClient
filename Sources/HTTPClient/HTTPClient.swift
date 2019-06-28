@@ -11,7 +11,6 @@ import Globals
 import Tolerance
 #endif
 
-
 public enum HTTPClientError: Error {
     case voidData
     case invalidComponents(components: URLComponents)
@@ -23,13 +22,13 @@ public enum HTTPClientError: Error {
     case tokenRefreshDidFail
     case missingTokenKey(key: String)
     case securityFailure
+    case undefinedFileUrl(taskUrl: URL?)
+    case excessiveNumberOfAttempts
 }
-
 
 public protocol StringRecipient{
     func didReceiveStringResponse(string:String)
 }
-
 
 public extension Notification {
     struct Auth {
@@ -38,6 +37,8 @@ public extension Notification {
 }
 
 
+/// An HTTPClient supporting Bearer Token Authentication mechanisms.
+/// With support of automatic reconnection, and token refresh.
 open class HTTPClient{
 
     public var context: AuthContext
@@ -84,7 +85,7 @@ open class HTTPClient{
                     authDidFail(HTTPClientError.missingTokenKey(key: self.context.retrieveTokenKey),"response: \(r)")
                 }
 
-            }, didFail: authDidFail)
+            }, didFail: authDidFail, nbOfAttempts: 1)
         }catch{
             authDidFail(error, "")
         }
@@ -119,7 +120,7 @@ open class HTTPClient{
                         }else{
                             refreshDidFail(HTTPClientError.missingTokenKey(key: self.context.retrieveTokenKey),"response: \(r)")
                         }
-                    }, didFail: refreshDidFail)
+                    }, didFail: refreshDidFail, nbOfAttempts: 1)
                 }else{
                     refreshDidFail(HTTPClientError.tokenRefreshIsNotSupported, "")
                 }
@@ -149,7 +150,7 @@ open class HTTPClient{
                 self.lastAuthAttempt = nil
                 self.lastRefreshAttempt = nil
                 didSucceed(NSLocalizedString("Successful deconnection", comment: "Successful deconnection"))
-            }, didFail: didFail)
+            }, didFail: didFail, nbOfAttempts: 1)
         }catch{
             didFail(error, "")
         }
@@ -216,73 +217,80 @@ open class HTTPClient{
     ///   - resultType: the generic result type
     ///   - didSucceed: the success closure
     ///   - didFail: the failure closure
-    open func call<T:Codable>(request:URLRequest,
-                                    resultType: T.Type,
-                                    didSucceed: @escaping (T) -> (),
-                                    didFail: @escaping (_ error: Error ,_ message: String) -> ()){
+    ///   - nbOfAttempts: if set to 0 there in case of security issue there would be no more calls
+    open func call<T:Codable>(  request:URLRequest,
+                                resultType: T.Type,
+                                didSucceed: @escaping (T) -> (),
+                                didFail: @escaping (_ error: Error ,_ message: String) -> (),
+                                nbOfAttempts: Int = 3){
         //log("\(request.httpMethod?.uppercased() ?? "" ) \(request.url!) \(String(data: request.httpBody!, encoding: .utf8))")
-        let task = URLSession.shared.dataTask(with: request){ (data, response, error) in
-            syncOnMain {
-                guard let httpURLResponse = response as? HTTPURLResponse else{
-                    didFail(HTTPClientError.httpContextIsInvalid, NSLocalizedString("The response is not a HTTP response.", comment: "The response is not a HTTP response."))
-                    return
-                }
-                if [401,403].contains(httpURLResponse.statusCode) {
-                    if request.url != self.context.loginDescriptor.baseURL && request.url != self.context.refreshTokenDescriptor?.baseURL{
-                        self.refresh(refreshDidSucceed: { (_) in
-                            self.call(request: request, resultType: resultType , didSucceed: didSucceed, didFail: didFail)
-                        }, refreshDidFail: { (_, _) in
-                            if self.context.useReducedSecurityMode{
-                                // In critical context we should never store the credentials
-                                if self.context.credentials.isNotVoid{
-                                    self.authenticate(account: self.context.credentials.account, password: self.context.credentials.password, authDidSucceed: { (_) in
-                                        self.call(request: request, resultType: resultType, didSucceed: didSucceed, didFail: didFail)
-                                    }, authDidFail: { (_, _) in
-                                        didFail(HTTPClientError.authenticationDidFail, NSLocalizedString("Authentication did fail", comment: "Authentication did fail"))
-                                    })
+
+        if nbOfAttempts == 0{
+            didFail(HTTPClientError.excessiveNumberOfAttempts, NSLocalizedString("Excessive number of Attempts.", comment: "Excessive number of Attempts."))
+        }else{
+            let nbOfAttempts: Int = nbOfAttempts - 1
+            let task = URLSession.shared.dataTask(with: request){ (data, response, error) in
+                syncOnMain {
+                    guard let httpURLResponse = response as? HTTPURLResponse else{
+                        didFail(HTTPClientError.httpContextIsInvalid, NSLocalizedString("The response is not a HTTP response.", comment: "The response is not a HTTP response."))
+                        return
+                    }
+                    if [401,403].contains(httpURLResponse.statusCode) && nbOfAttempts > 0{
+                        if request.url != self.context.loginDescriptor.baseURL && request.url != self.context.refreshTokenDescriptor?.baseURL{
+                            self.refresh(refreshDidSucceed: { (_) in
+                                self.call(request: request, resultType: resultType , didSucceed: didSucceed, didFail: didFail, nbOfAttempts: nbOfAttempts)
+                            }, refreshDidFail: { (_, _) in
+                                if self.context.useReducedSecurityMode{
+                                    // In critical context we should never store the credentials
+                                    if self.context.credentials.isNotVoid{
+                                        self.authenticate(account: self.context.credentials.account, password: self.context.credentials.password, authDidSucceed: { (_) in
+                                            self.call(request: request, resultType: resultType, didSucceed: didSucceed, didFail: didFail, nbOfAttempts: nbOfAttempts)
+                                        }, authDidFail: { (_, _) in
+                                            didFail(HTTPClientError.authenticationDidFail, NSLocalizedString("Authentication did fail", comment: "Authentication did fail"))
+                                        })
+                                    }else{
+                                        didFail(HTTPClientError.authenticationDidFail, NSLocalizedString("Credentials are void", comment: "Credentials are void"))
+                                        // You can observe this notification and prompt to auth
+                                        NotificationCenter.default.post(name: Notification.Auth.authenticationIsRequired, object: nil)
+                                    }
                                 }else{
-                                    didFail(HTTPClientError.authenticationDidFail, NSLocalizedString("Credentials are void", comment: "Credentials are void"))
+                                    didFail(HTTPClientError.tokenRefreshDidFail,NSLocalizedString("Token refresh did fail", comment: "Token refresh did fail"))
                                     // You can observe this notification and prompt to auth
                                     NotificationCenter.default.post(name: Notification.Auth.authenticationIsRequired, object: nil)
                                 }
-                            }else{
-                                didFail(HTTPClientError.tokenRefreshDidFail,NSLocalizedString("Token refresh did fail", comment: "Token refresh did fail"))
-                                // You can observe this notification and prompt to auth
-                                NotificationCenter.default.post(name: Notification.Auth.authenticationIsRequired, object: nil)
-                            }
-                        })
-                    }else{
-                        // It is a refresh token or a login call
-                        // There is nothing to do
-                        didFail(HTTPClientError.securityFailure,"")
-                    }
-                }else{
-                    guard 200...299 ~= httpURLResponse.statusCode else{
-                        // Todo give a relevent message
-                        didFail(HTTPClientError.invalidHTTPStatus(code: httpURLResponse.statusCode, message: ""), NSLocalizedString("Invalid", comment: "Invalid."))
-                        return
-                    }
-                    if let data = data{
-                        do{
-                            if resultType == String.self{
-                                let string = String(data: data, encoding: .utf8)
-                                didSucceed(string as! T)
-                            }else{
-                                let o:T = try JSONCoder.decode(resultType, from: data)
-                                didSucceed(o)
-                            }
-                        }catch{
-                            didFail(error, NSLocalizedString("Deserialization did fail", comment: "Deserialization did fail"))
+                            })
+                        }else{
+                            // It is a refresh token or a login call
+                            // There is nothing to do
+                            didFail(HTTPClientError.securityFailure,"")
                         }
                     }else{
-                        didFail(HTTPClientError.voidData, NSLocalizedString("Void data", comment: "Void data"))
+                        guard 200...299 ~= httpURLResponse.statusCode else{
+                            // Todo give a relevent message
+                            didFail(HTTPClientError.invalidHTTPStatus(code: httpURLResponse.statusCode, message: ""), NSLocalizedString("Invalid", comment: "Invalid."))
+                            return
+                        }
+                        if let data = data{
+                            do{
+                                if resultType == String.self{
+                                    let string = String(data: data, encoding: .utf8)
+                                    didSucceed(string as! T)
+                                }else{
+                                    let o:T = try JSONCoder.decode(resultType, from: data)
+                                    didSucceed(o)
+                                }
+                            }catch{
+                                didFail(error, NSLocalizedString("Deserialization did fail", comment: "Deserialization did fail"))
+                            }
+                        }else{
+                            didFail(HTTPClientError.voidData, NSLocalizedString("Void data", comment: "Void data"))
+                        }
                     }
                 }
-
-
             }
+            task.resume()
         }
-        task.resume()
+
     }
 
 
@@ -294,68 +302,148 @@ open class HTTPClient{
     ///   - resultType: the generic result Array<T> type
     ///   - didSucceed: the success closure
     ///   - didFail: the failure closure
+    ///   - nbOfAttempts: if set to 0 there in case of security issue there would be no more calls
     open func call<T:Codable>(request:URLRequest,
                               resultType: [T].Type,
                               didSucceed: @escaping ([T]) -> (),
-                              didFail: @escaping (_ error: Error ,_ message: String) -> ()){
-        //log(request.url)
-        let task = URLSession.shared.dataTask(with: request){ (data, response, error) in
-            syncOnMain {
-                guard let httpURLResponse = response as? HTTPURLResponse else{
-                    didFail(HTTPClientError.httpContextIsInvalid, NSLocalizedString("The response is not a HTTP response.", comment: "The response is not a HTTP response."))
-                    return
-                }
-                if [401,403].contains(httpURLResponse.statusCode) {
-                    if request.url != self.context.loginDescriptor.baseURL && request.url != self.context.refreshTokenDescriptor?.baseURL{
-                        self.refresh(refreshDidSucceed: { (_) in
-                            self.call(request: request, resultType: resultType , didSucceed: didSucceed, didFail: didFail)
-                        }, refreshDidFail: { (_, _) in
-                            if self.context.useReducedSecurityMode{
-                                // In critical context we should never store the credentials
-                                if self.context.credentials.isNotVoid{
-                                    self.authenticate(account:  self.context.credentials.account, password:  self.context.credentials.password, authDidSucceed: { (_) in
-                                        self.call(request: request, resultType: resultType, didSucceed: didSucceed, didFail: didFail)
-                                    }, authDidFail: { (_, _) in
-                                        didFail(HTTPClientError.authenticationDidFail, NSLocalizedString("Authentication did fail", comment: "Authentication did fail"))
-                                    })
+                              didFail: @escaping (_ error: Error ,_ message: String) -> (),
+                              nbOfAttempts: Int = 3){
+        if nbOfAttempts == 0{
+            didFail(HTTPClientError.excessiveNumberOfAttempts, NSLocalizedString("Excessive number of Attempts.", comment: "Excessive number of Attempts."))
+        }else{
+            let nbOfAttempts: Int = nbOfAttempts - 1
+            let task = URLSession.shared.dataTask(with: request){ (data, response, error) in
+                syncOnMain {
+                    guard let httpURLResponse = response as? HTTPURLResponse else{
+                        didFail(HTTPClientError.httpContextIsInvalid, NSLocalizedString("The response is not a HTTP response.", comment: "The response is not a HTTP response."))
+                        return
+                    }
+                    if [401,403].contains(httpURLResponse.statusCode) && nbOfAttempts > 0{
+                        if request.url != self.context.loginDescriptor.baseURL && request.url != self.context.refreshTokenDescriptor?.baseURL{
+                            self.refresh(refreshDidSucceed: { (_) in
+                                self.call(request: request, resultType: resultType , didSucceed: didSucceed, didFail: didFail, nbOfAttempts: nbOfAttempts)
+                            }, refreshDidFail: { (_, _) in
+                                if self.context.useReducedSecurityMode{
+                                    // In critical context we should never store the credentials
+                                    if self.context.credentials.isNotVoid{
+                                        self.authenticate(account:  self.context.credentials.account, password:  self.context.credentials.password, authDidSucceed: { (_) in
+                                            self.call(request: request, resultType: resultType, didSucceed: didSucceed, didFail: didFail, nbOfAttempts: nbOfAttempts)
+                                        }, authDidFail: { (_, _) in
+                                            didFail(HTTPClientError.authenticationDidFail, NSLocalizedString("Authentication did fail", comment: "Authentication did fail"))
+                                        })
+                                    }else{
+                                        didFail(HTTPClientError.authenticationDidFail, NSLocalizedString("Credentials are void", comment: "Credentials are void"))
+                                        // You can observe this notification and prompt to auth
+                                        NotificationCenter.default.post(name: Notification.Auth.authenticationIsRequired, object: nil)
+                                    }
                                 }else{
-                                    didFail(HTTPClientError.authenticationDidFail, NSLocalizedString("Credentials are void", comment: "Credentials are void"))
+                                    didFail(HTTPClientError.tokenRefreshDidFail,NSLocalizedString("Token refresh did fail", comment: "Token refresh did fail"))
                                     // You can observe this notification and prompt to auth
                                     NotificationCenter.default.post(name: Notification.Auth.authenticationIsRequired, object: nil)
                                 }
-                            }else{
-                                didFail(HTTPClientError.tokenRefreshDidFail,NSLocalizedString("Token refresh did fail", comment: "Token refresh did fail"))
-                                // You can observe this notification and prompt to auth
-                                NotificationCenter.default.post(name: Notification.Auth.authenticationIsRequired, object: nil)
-                            }
-                        })
-                    }else{
-                        // It is a refresh token or a login call
-                        // There is nothing to do
-                        didFail(HTTPClientError.securityFailure,"")
-                    }
-                }else{
-
-                    guard 200...299 ~= httpURLResponse.statusCode else{
-                        // Todo give a relevent message
-                        didFail(HTTPClientError.invalidHTTPStatus(code: httpURLResponse.statusCode, message: ""), NSLocalizedString("Invalid", comment: "Invalid."))
-                        return
-                    }
-                    if let data = data{
-                        do{
-                            let o:[T] = try JSONCoder.decode([T].self, from: data)
-                            didSucceed(o)
-                        }catch{
-                            didFail(error, NSLocalizedString("Deserialization did fail", comment: "Deserialization did fail"))
+                            })
+                        }else{
+                            // It is a refresh token or a login call
+                            // There is nothing to do
+                            didFail(HTTPClientError.securityFailure,"")
                         }
                     }else{
-                        didFail(HTTPClientError.voidData, NSLocalizedString("Void data", comment: "Void data"))
+
+                        guard 200...299 ~= httpURLResponse.statusCode else{
+                            // Todo give a relevent message
+                            didFail(HTTPClientError.invalidHTTPStatus(code: httpURLResponse.statusCode, message: ""), NSLocalizedString("Invalid", comment: "Invalid."))
+                            return
+                        }
+                        if let data = data{
+                            do{
+                                let o:[T] = try JSONCoder.decode([T].self, from: data)
+                                didSucceed(o)
+                            }catch{
+                                didFail(error, NSLocalizedString("Deserialization did fail", comment: "Deserialization did fail"))
+                            }
+                        }else{
+                            didFail(HTTPClientError.voidData, NSLocalizedString("Void data", comment: "Void data"))
+                        }
                     }
                 }
             }
+            task.resume()
         }
-        task.resume()
     }
+
+    // MARK: - Download
+
+    /// A download task with auth support
+    ///
+    /// - Parameters:
+    ///   - request: the request
+    ///   - didSucceed: the success closure that contains the local file URL
+    ///   - didFail: the failure closure
+    ///   - nbOfAttempts: if set to 0 there in case of security issue there would be no more calls
+    open func download( request:URLRequest,
+                        didSucceed: @escaping (_ fileUrl: URL) -> (),
+                        didFail: @escaping (_ error: Error ,_ message: String) -> (),
+                        nbOfAttempts: Int = 3){
+        if nbOfAttempts == 0{
+            didFail(HTTPClientError.excessiveNumberOfAttempts, NSLocalizedString("Excessive number of Attempts.", comment: "Excessive number of Attempts."))
+        }else{
+            let nbOfAttempts: Int = nbOfAttempts - 1
+            let task = URLSession.shared.downloadTask(with: request) { (fileUrl, response, error) in
+                syncOnMain {
+                    guard let httpURLResponse: HTTPURLResponse = response as? HTTPURLResponse else{
+                        didFail(HTTPClientError.httpContextIsInvalid, NSLocalizedString("The response is not a HTTP response.", comment: "The response is not a HTTP response."))
+                        return
+                    }
+                    if [401,403].contains(httpURLResponse.statusCode) && nbOfAttempts > 0 {
+                        if request.url != self.context.loginDescriptor.baseURL && request.url != self.context.refreshTokenDescriptor?.baseURL{
+                            self.refresh(refreshDidSucceed: { (_) in
+                                self.download(request: request, didSucceed: didSucceed, didFail: didFail, nbOfAttempts: nbOfAttempts)
+                            }, refreshDidFail: { (_, _) in
+                                if self.context.useReducedSecurityMode{
+                                    // In critical context we should never store the credentials
+                                    if self.context.credentials.isNotVoid{
+                                        self.authenticate(account:  self.context.credentials.account, password:  self.context.credentials.password, authDidSucceed: { (_) in
+                                            self.download(request: request, didSucceed: didSucceed, didFail: didFail, nbOfAttempts: nbOfAttempts)
+                                        }, authDidFail: { (_, _) in
+                                            didFail(HTTPClientError.authenticationDidFail, NSLocalizedString("Authentication did fail", comment: "Authentication did fail"))
+                                        })
+                                    }else{
+                                        didFail(HTTPClientError.authenticationDidFail, NSLocalizedString("Credentials are void", comment: "Credentials are void"))
+                                        // You can observe this notification and prompt to auth
+                                        NotificationCenter.default.post(name: Notification.Auth.authenticationIsRequired, object: nil)
+                                    }
+                                }else{
+                                    didFail(HTTPClientError.tokenRefreshDidFail,NSLocalizedString("Token refresh did fail", comment: "Token refresh did fail"))
+                                    // You can observe this notification and prompt to auth
+                                    NotificationCenter.default.post(name: Notification.Auth.authenticationIsRequired, object: nil)
+                                }
+                            })
+                        }else{
+                            // It is a refresh token or a login call
+                            // There is nothing to do
+                            didFail(HTTPClientError.securityFailure,"")
+                        }
+                    }else{
+
+                        guard 200...299 ~= httpURLResponse.statusCode else{
+                            // Todo give a relevent message
+                            didFail(HTTPClientError.invalidHTTPStatus(code: httpURLResponse.statusCode, message: ""), NSLocalizedString("Invalid", comment: "Invalid."))
+                            return
+                        }
+                        if let fileUrl:URL = fileUrl{
+                            didSucceed(fileUrl)
+                        }else{
+                            didFail(HTTPClientError.undefinedFileUrl(taskUrl: request.url), NSLocalizedString("Invalid", comment: "Invalid."))
+                        }
+                    }
+                }
+            }
+            task.resume()
+        }
+    }
+
+
+
 
     // MARK: - String Recipient
 
