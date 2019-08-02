@@ -24,7 +24,6 @@ enum KeychainError: Error {
 // 2. the Keychain to store the password
 public struct Storage{
 
-
     fileprivate static func _accountKeyFor(_ client:HTTPClient)->String{
         return "\(client.context.credentials.account)_\(client.context.authenticationServerBaseURL.absoluteString)".md5
     }
@@ -37,6 +36,7 @@ public struct Storage{
     /// - Throws: KeychainError.unhandledError(...) on key chain access errors.
     public static func save(_ client: HTTPClient) throws {
         #if !os(Linux)
+        defer { CFPreferencesAppSynchronize(kCFPreferencesCurrentApplication) }
         let credentials: Credentials = client.context.credentials
         guard credentials.isNotVoid else{ throw KeychainError.noCredentials }
         UserDefaults.standard.set(credentials.account, forKey: self._accountKeyFor(client))
@@ -91,6 +91,7 @@ public struct Storage{
     /// - Throws: KeychainError.unhandledError(...) on key chain deletion errors.
     public static func delete(_ client: HTTPClient) throws{
         #if !os(Linux)
+        defer { CFPreferencesAppSynchronize(kCFPreferencesCurrentApplication) }
         let credentials: Credentials = client.context.credentials
         guard credentials.isNotVoid else{ throw KeychainError.noCredentials }
         UserDefaults.standard.removeObject(forKey: self._accountKeyFor(client))

@@ -51,7 +51,18 @@ open class HTTPClient{
 
     public init (context: AuthContext){
         self.context = context
-        doCatchLog({ () -> () in try Storage.load(self) })
+        do{
+            try Storage.load(self)
+        }catch {
+            switch error {
+            case KeychainError.noCredentials:
+                // nothing to do
+                break
+            default:
+                log(error)
+            }
+        }
+
     }
 
     /// Authenticate to Bearer token Providers
@@ -78,7 +89,16 @@ open class HTTPClient{
                 if let token:String = r[self.context.retrieveTokenKey]{
                     self.accessToken = token
                     if self.context.useReducedSecurityMode{
-                        doCatchLog({try Storage.save(self) })
+                        do{
+                           try Storage.save(self)
+                        }catch {
+                            switch error {
+                            case KeychainError.noCredentials:
+                                // nothing to do
+                                break
+                            default:
+                                log(error)
+                            }                        }
                     }
                     authDidSucceed(NSLocalizedString("Successful authentication", comment: "Successful authentication"))
                 }else{

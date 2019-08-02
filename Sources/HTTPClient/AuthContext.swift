@@ -35,10 +35,6 @@ public struct AuthContext: Codable{
     // Defines the key to submit the password on Authentication
     public var passwordKey:String = "password"
 
-    // Defines
-    public var groupKey:String = "group"
-
-
     // Defines the key used to extract the access token on Authentication
     public var retrieveTokenKey:String = "access_token"
 
