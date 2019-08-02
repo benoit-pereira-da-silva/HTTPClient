@@ -160,11 +160,10 @@ open class HTTPClient{
                      didFail: @escaping (_ error: Error ,_ message: String) -> ()){
         do{
             let logout:RequestDescriptor =  self.context.logoutDescriptor
-            var request: URLRequest = try self.requestFrom(url: logout.baseURL,
+            let request: URLRequest = try self.requestFrom(url: logout.baseURL,
                                                            arguments: nil,
                                                            argumentsEncoding: logout.argumentsEncoding
                 ,method:logout.method)
-            request.setValue("Bearer \(self.accessToken)", forHTTPHeaderField: "Authorization")
             self.call(request: request, resultType: String.self, didSucceed: { (r) in
                 self.accessToken = ""
                 self.lastAuthAttempt = nil
@@ -187,10 +186,9 @@ open class HTTPClient{
                           arguments: Dictionary<String,String>?,
                           argumentsEncoding: ArgumentsEncoding = .queryString,
                           method: HTTPMethod = HTTPMethod.GET) throws-> URLRequest{
-
+        var request: URLRequest
         switch argumentsEncoding {
         case .queryString:
-
             guard var components : URLComponents = URLComponents(url: url , resolvingAgainstBaseURL: false) else{
                 throw HTTPClientError.invalidURL(url: url)
             }
@@ -203,11 +201,11 @@ open class HTTPClient{
             guard let url:URL = components.url else {
                 throw HTTPClientError.invalidComponents(components: components)
             }
-            var request: URLRequest =  URLRequest(url: url)
+            request = URLRequest(url: url)
             request.httpMethod = method.rawValue
             return request
         case .httpBody(let encoding):
-            var request: URLRequest =  URLRequest(url: url)
+            request =  URLRequest(url: url)
             if let arguments:Dictionary<String,String> = arguments{
                 switch encoding{
                 case .form:
@@ -238,7 +236,7 @@ open class HTTPClient{
     ///   - didSucceed: the success closure
     ///   - didFail: the failure closure
     ///   - nbOfAttempts: if set to 0 there in case of security issue there would be no more calls
-    open func call<T:Codable>(  request:URLRequest,
+    open func call<T:Codable>(  request: URLRequest,
                                 resultType: T.Type,
                                 didSucceed: @escaping (T) -> (),
                                 didFail: @escaping (_ error: Error ,_ message: String) -> (),
