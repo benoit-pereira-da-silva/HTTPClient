@@ -36,6 +36,11 @@ public extension Notification {
     }
 }
 
+// Conventional structure used to pass responses messages.
+struct Message: Codable {
+    var message : String?
+}
+
 
 /// An HTTPClient supporting Bearer Token Authentication mechanisms.
 /// With support of automatic reconnection, and token refresh.
@@ -284,8 +289,8 @@ open class HTTPClient{
                         }
                     }else{
                         guard 200...299 ~= httpURLResponse.statusCode else{
-                            // Todo give a relevent message
-                            didFail(HTTPClientError.invalidHTTPStatus(code: httpURLResponse.statusCode, message: ""), NSLocalizedString("Invalid", comment: "Invalid."))
+                            let message: String = self.messageFromData(data: data, defaultMessage: NSLocalizedString("Invalid", comment: "Invalid."))
+                            didFail(HTTPClientError.invalidHTTPStatus(code: httpURLResponse.statusCode, message: message), message)
                             return
                         }
                         if let data = data{
@@ -368,8 +373,8 @@ open class HTTPClient{
                     }else{
 
                         guard 200...299 ~= httpURLResponse.statusCode else{
-                            // Todo give a relevent message
-                            didFail(HTTPClientError.invalidHTTPStatus(code: httpURLResponse.statusCode, message: ""), NSLocalizedString("Invalid", comment: "Invalid."))
+                            let message: String = self.messageFromData(data: data, defaultMessage: NSLocalizedString("Invalid", comment: "Invalid."))
+                            didFail(HTTPClientError.invalidHTTPStatus(code: httpURLResponse.statusCode, message: message), message)
                             return
                         }
                         if let data = data{
@@ -442,9 +447,7 @@ open class HTTPClient{
                             didFail(HTTPClientError.securityFailure,"")
                         }
                     }else{
-
                         guard 200...299 ~= httpURLResponse.statusCode else{
-                            // Todo give a relevent message
                             didFail(HTTPClientError.invalidHTTPStatus(code: httpURLResponse.statusCode, message: ""), NSLocalizedString("Invalid", comment: "Invalid."))
                             return
                         }
@@ -487,5 +490,17 @@ open class HTTPClient{
                 recipient.didReceiveStringResponse(string: "\(error) \(message) ")
             })
         })
+    }
+
+
+    open func messageFromData(data: Data?, defaultMessage :String)-> String{
+        if let data: Data = data{
+            // Do we have a response object?
+            if let container: Message = try? JSON.decoder.decode(Message.self, from: data),
+                let message: String = container.message{
+                return message
+            }
+        }
+        return defaultMessage
     }
 }
