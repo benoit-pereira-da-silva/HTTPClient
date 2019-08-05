@@ -24,6 +24,7 @@ public enum HTTPClientError: Error {
     case securityFailure
     case undefinedFileUrl(taskUrl: URL?)
     case excessiveNumberOfAttempts
+    case stringDecodingError
 }
 
 public protocol StringRecipient{
@@ -297,7 +298,11 @@ open class HTTPClient{
                             do{
                                 if resultType == String.self{
                                     let string = String(data: data, encoding: .utf8)
-                                    didSucceed(string as! T)
+                                    if let s:T = string as? T{
+                                         didSucceed(s)
+                                    }else{
+                                        didFail(HTTPClientError.stringDecodingError, NSLocalizedString("String decoding did fail", comment: "String decoding did fail"))
+                                    }
                                 }else{
                                     let o:T = try JSONCoder.decode(resultType, from: data)
                                     didSucceed(o)
