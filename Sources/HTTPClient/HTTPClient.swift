@@ -39,7 +39,7 @@ public extension Notification {
 
 // Conventional structure used to pass responses messages.
 struct Message: Codable {
-    var message : String?
+    var message : String
 }
 
 
@@ -501,8 +501,9 @@ open class HTTPClient{
     open func messageFromData(data: Data?, defaultMessage :String)-> String{
         if let data: Data = data{
             // Do we have a response object?
-            if let container: Message = try? JSON.decoder.decode(Message.self, from: data),
-                let message: String = container.message{
+            if let container: Message = try? JSON.decoder.decode(Message.self, from: data){
+                return container.message
+            }else if let message: String = String(data: data, encoding: .utf8){
                 return message
             }
         }
