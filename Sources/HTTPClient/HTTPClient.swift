@@ -234,6 +234,26 @@ open class HTTPClient{
     }
 
 
+
+
+    /// Returns an url request from an URL and a codable Object
+    /// The object is passed in the body as a JSON payload
+    ///
+    /// - Parameters:
+    ///   - url: the url
+    ///   - arguments: the arguments as a dictionary
+    /// - Returns: the Request
+    open func requestWithCodableObjectFrom<T:Codable & Tolerant>(url: URL,
+                          object: T,
+                          method: HTTPMethod = HTTPMethod.GET) throws-> URLRequest{
+        var request: URLRequest = URLRequest(url: url)
+        request.httpBody = try JSON.encoder.encode(object)
+        request.setValue("application/json;charset=utf-8", forHTTPHeaderField: "Content-Type")
+        request.httpMethod = method.rawValue
+        return request
+
+    }
+
     /// Invoke generic request facility
     ///
     /// - Parameters:
