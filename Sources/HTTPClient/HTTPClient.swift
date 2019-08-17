@@ -233,17 +233,15 @@ open class HTTPClient{
         }
     }
 
-
-
-
     /// Returns an url request from an URL and a codable Object
     /// The object is passed in the body as a JSON payload
     ///
     /// - Parameters:
-    ///   - url: the url
-    ///   - arguments: the arguments as a dictionary
-    /// - Returns: the Request
-    open func requestWithCodableObjectFrom<T:Codable & Tolerant>(url: URL,
+    ///   - url: the concerned url
+    ///   - object: the object to be serialized in the body.
+    ///   - method: the http Method
+    /// - Returns: An URL Request
+    open func requestWithObjectInBody<T:Codable & Tolerant>(url: URL,
                           object: T,
                           method: HTTPMethod = HTTPMethod.GET) throws-> URLRequest{
         var request: URLRequest = URLRequest(url: url)

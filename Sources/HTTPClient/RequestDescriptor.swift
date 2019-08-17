@@ -1,5 +1,5 @@
 //
-//  HTTPCallDescriptor.swift
+//  RequestDescriptor.swift
 //  HTTPClient
 //
 //  Created by Benoit Pereira da silva on 16/12/2018.
