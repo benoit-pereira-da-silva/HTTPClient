@@ -83,6 +83,8 @@ open class HTTPClient{
                            authDidSucceed: @escaping (_ message: String) -> (),
                            authDidFail: @escaping (_ error: Error ,_ message: String) -> ()) {
         do{
+            self.context.credentials.account = account
+            self.context.credentials.password = password
             let login: RequestDescriptor = self.context.loginDescriptor
             // @todo to be generalized
             let request: URLRequest = try self.requestFrom(url: login.baseURL,
